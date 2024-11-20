@@ -1,5 +1,8 @@
 import heapq
 import numpy as np
+import json
+from math import cos, radians,degrees
+
 
 def euclidean_distance(point1, point2):
     return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
@@ -37,4 +40,55 @@ def dijkstra(adjacency, start, goal):
         current = previous_nodes[current]
     path.reverse()
 
-    return path, distances[goal]
+    return path
+
+#returns dict with all adjacencies
+def parse_geojson(fileName):
+    with open(fileName) as f:
+        campus_json = json.load(f)
+
+    paths = campus_json['features']
+    adjacency = {} # key: start coordinate, value: list of end coordinates
+
+    # create dict storing all edges
+    for path in paths:
+        coordinates = path['geometry']['coordinates']
+        for i in range(len(coordinates)-1):
+            point1 = tuple(coordinates[i])
+            point2 = tuple(coordinates[i+1])
+
+            if point1 in adjacency.keys():
+                adjacency[point1].append(point2)
+            else:
+                adjacency[point1] = [point2]
+
+            if point2 in adjacency.keys():
+                adjacency[point2].append(point1)
+            else:
+                adjacency[point2] = [point1]
+
+    return adjacency
+
+#return shortest path in xy coordinates with origin at start
+def shortest_xy_path(adjacency, start, end):
+    gps_path = dijkstra(adjacency, start, end)
+    start = gps_path[0]
+    xy_path = [gps_to_xy(gps_coord, start) for gps_coord in gps_path]
+    return xy_path
+
+#converts single gps coordinate to xy point with origin at reference
+def gps_to_xy(gps_coord, reference): 
+    R = 6371000  # radius of the earth in meters
+    x = R*((radians(gps_coord[0]) - radians(reference[0])) * cos(0.5 * (radians(gps_coord[1]) + radians(reference[1]))))
+    y = R*(radians(gps_coord[1]) - radians(reference[1]))
+    return (x,y)
+
+def xy_to_gps(xy_coord, reference):
+    R = 6371000  # radius of the earth in meters
+    (x, y) = xy_coord
+    
+    # Calculate the GPS latitude and longitude
+    gps_lat = reference[0] + degrees(x / R / cos(radians(reference[1])))
+    gps_lon = reference[1] + degrees(y / R)
+    
+    return (gps_lat, gps_lon)
